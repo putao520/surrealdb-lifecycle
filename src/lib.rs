@@ -40,6 +40,9 @@ use surrealdb::Surreal;
 use std::sync::{OnceLock, LazyLock};
 use tokio::sync::RwLock;
 
+/// Type alias for the SurrealDB WebSocket client.
+pub type DB = Arc<Surreal<Client>>;
+
 /// Global singleton SurrealDB instance.
 static GLOBAL_DB: LazyLock<RwLock<Option<Arc<Surreal<Client>>>>> = LazyLock::new(|| RwLock::new(None));
 

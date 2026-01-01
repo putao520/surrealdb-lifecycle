@@ -1,0 +1,27 @@
+[package]
+name = "surrealdb-lifecycle"
+version = "0.1.0"
+edition = "2021"
+description = "SurrealDB Server lifecycle manager with cross-process reference counting"
+license = "MIT"
+repository = "https://github.com/putao520/surrealdb-lifecycle"
+authors = ["putao520"]
+
+[dependencies]
+anyhow = "1.0"
+chrono = "0.4"
+named-sem = "0.2"
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"
+surrealdb = "2"
+tokio = { version = "1", features = ["full"] }
+dirs = "5.0"
+
+[target.'cfg(unix)'.dependencies]
+libc = "0.2"
+
+[dev-dependencies]
+tempfile = "3"
+
+[target.'cfg(windows)'.dependencies]
+winapi = { version = "0.3", features = ["handleapi", "processthreadsapi", "winnt"] }

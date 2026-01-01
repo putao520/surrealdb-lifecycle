@@ -747,10 +747,13 @@ impl ServerCoordinator {
     }
 }
 
-/// Look for SurrealDB binary in ~/.surrealdb/bin/ (managed location).
+/// Look for SurrealDB binary in managed locations.
+///
+/// Searches in order:
+/// 1. ~/.surrealdb/bin/ (default managed location)
+/// 2. ~/.gsc/bin/ (GCode shared location)
 fn managed_surreal_binary() -> Option<PathBuf> {
     let home = dirs::home_dir()?;
-    let base = home.join(".surrealdb").join("bin");
 
     let platform = match std::env::consts::OS {
         "linux" => "linux",
@@ -768,15 +771,19 @@ fn managed_surreal_binary() -> Option<PathBuf> {
     if cfg!(windows) {
         name.push_str(".exe");
     }
-    let candidate = base.join(&name);
-    if candidate.is_file() {
-        return Some(candidate);
-    }
 
     let generic_name = if cfg!(windows) { "surreal.exe" } else { "surreal" };
-    let generic_candidate = base.join(generic_name);
-    if generic_candidate.is_file() {
-        return Some(generic_candidate);
+
+    // Search in multiple managed locations
+    for base_dir in [home.join(".surrealdb/bin"), home.join(".gsc/bin")] {
+        let candidate = base_dir.join(&name);
+        if candidate.is_file() {
+            return Some(candidate);
+        }
+        let generic_candidate = base_dir.join(generic_name);
+        if generic_candidate.is_file() {
+            return Some(generic_candidate);
+        }
     }
 
     None

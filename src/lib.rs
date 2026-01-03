@@ -6,6 +6,7 @@
 //! - **Automatic server startup**: Starts SurrealDB server on demand
 //! - **Health check & reconnection**: Automatically detects dead connections
 //! - **RAII cleanup**: Proper cleanup on process exit
+//! - **Multi-project support**: Share one server across multiple projects
 //!
 //! ## Usage
 //!
@@ -14,12 +15,58 @@
 //!
 //! #[tokio::main]
 //! async fn main() -> anyhow::Result<()> {
-//!     // Get or initialize the global SurrealDB connection
+//!     // Get or initialize with default configuration
 //!     let db = ServerCoordinator::global_db_or_init().await?;
 //!     // Use the database connection...
 //!     Ok(())
 //! }
 //! ```
+//!
+//! ## Custom Configuration
+//!
+//! ```no_run
+//! use surrealdb_lifecycle::ServerCoordinator;
+//!
+//! #[tokio::main]
+//! async fn main() -> anyhow::Result<()> {
+//!     let config = ServerCoordinator::builder()
+//!         .lock_path("/custom/path/server.lock")
+//!         .data_dir("/custom/path/data")
+//!         .semaphore_name("my_project_db")
+//!         .credentials("myuser", "mypass")
+//!         .namespace("my_namespace")
+//!         .database("my_database")
+//!         .build();
+//!
+//!     let db = ServerCoordinator::global_db_or_init_with_config(config).await?;
+//!     Ok(())
+//! }
+//! ```
+//!
+//! ## Sharing Server Across Multiple Projects
+//!
+//! Multiple projects can share the same SurrealDB server by using the **same semaphore name**:
+//!
+//! ```no_run
+//! // Project A configuration
+//! let config_a = ServerCoordinator::builder()
+//!     .semaphore_name("shared_company_db")  // Same semaphore!
+//!     .namespace("project_a")
+//!     .database("data")
+//!     .build();
+//!
+//! // Project B configuration
+//! let config_b = ServerCoordinator::builder()
+//!     .semaphore_name("shared_company_db")  // Same semaphore!
+//!     .namespace("project_b")
+//!     .database("data")
+//!     .build();
+//! ```
+//!
+//! With the same semaphore, both projects will:
+//! - Share one SurrealDB server instance
+//! - Use cross-process reference counting
+//! - Auto-shutdown when all projects exit
 
 use anyhow::{anyhow, Context, Result};
 use chrono::{DateTime, Utc};
@@ -72,12 +119,6 @@ pub mod defaults {
 
     /// Timeout for semaphore acquisition.
     pub const WAIT_TIMEOUT_SECS: u64 = 1;
-
-    /// Default auth credentials.
-    pub const USERNAME: &str = "root";
-    pub const PASSWORD: &str = "root";
-    pub const NAMESPACE: &str = "default";
-    pub const DATABASE: &str = "default";
 
     /// Default paths (relative to home directory).
     pub const LOCK_PATH: &str = ".surrealdb/server.lock";
@@ -300,13 +341,13 @@ impl Default for Config {
     fn default() -> Self {
         let home = dirs::home_dir().unwrap_or_else(|| PathBuf::from("."));
         Self {
-            lock_path: home.join(defaults::LOCK_PATH),
-            data_dir: home.join(defaults::DATA_DIR),
+            lock_path: home.join(".surrealdb/server.lock"),
+            data_dir: home.join(".surrealdb/data"),
             semaphore_name: default_semaphore_name(),
-            username: defaults::USERNAME.to_string(),
-            password: defaults::PASSWORD.to_string(),
-            namespace: defaults::NAMESPACE.to_string(),
-            database: defaults::DATABASE.to_string(),
+            username: "root".to_string(),
+            password: "root".to_string(),
+            namespace: "default".to_string(),
+            database: "default".to_string(),
             port_start: defaults::PORT_START,
             port_end: defaults::PORT_END,
             max_connections: defaults::MAX_CONNECTIONS,

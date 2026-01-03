@@ -34,11 +34,11 @@
 //!         .data_dir("/custom/path/data")
 //!         .semaphore_name("my_project_db")
 //!         .credentials("myuser", "mypass")
-//!         .namespace("my_namespace")
-//!         .database("my_database")
 //!         .build();
 //!
 //!     let db = ServerCoordinator::global_db_or_init_with_config(config).await?;
+//!     // Caller must select namespace and database:
+//!     db.use_ns("my_namespace").use_db("my_database").await?;
 //!     Ok(())
 //! }
 //! ```
@@ -51,15 +51,11 @@
 //! // Project A configuration
 //! let config_a = ServerCoordinator::builder()
 //!     .semaphore_name("shared_company_db")  // Same semaphore!
-//!     .namespace("project_a")
-//!     .database("data")
 //!     .build();
 //!
-//! // Project B configuration
+//! // Project B configuration (same semaphore!)
 //! let config_b = ServerCoordinator::builder()
-//!     .semaphore_name("shared_company_db")  // Same semaphore!
-//!     .namespace("project_b")
-//!     .database("data")
+//!     .semaphore_name("shared_company_db")
 //!     .build();
 //! ```
 //!
@@ -67,6 +63,12 @@
 //! - Share one SurrealDB server instance
 //! - Use cross-process reference counting
 //! - Auto-shutdown when all projects exit
+//!
+//! Each project should then select its own namespace/database:
+//! ```no_run
+//! # let db = surrealdb_lifecycle::ServerCoordinator::global_db_or_init().await.unwrap();
+//! db.use_ns("project_a").use_db("data").await?;
+//! ```
 
 use anyhow::{anyhow, Context, Result};
 use chrono::{DateTime, Utc};
@@ -328,8 +330,6 @@ pub struct Config {
     pub semaphore_name: String,
     pub username: String,
     pub password: String,
-    pub namespace: String,
-    pub database: String,
     pub port_start: u16,
     pub port_end: u16,
     pub max_connections: usize,
@@ -346,8 +346,6 @@ impl Default for Config {
             semaphore_name: default_semaphore_name(),
             username: "root".to_string(),
             password: "root".to_string(),
-            namespace: "default".to_string(),
-            database: "default".to_string(),
             port_start: defaults::PORT_START,
             port_end: defaults::PORT_END,
             max_connections: defaults::MAX_CONNECTIONS,
@@ -400,16 +398,6 @@ impl ConfigBuilder {
     pub fn credentials(mut self, username: impl Into<String>, password: impl Into<String>) -> Self {
         self.config.username = username.into();
         self.config.password = password.into();
-        self
-    }
-
-    pub fn namespace(mut self, ns: impl Into<String>) -> Self {
-        self.config.namespace = ns.into();
-        self
-    }
-
-    pub fn database(mut self, db: impl Into<String>) -> Self {
-        self.config.database = db.into();
         self
     }
 
@@ -762,7 +750,7 @@ impl ServerCoordinator {
             password: &self.config.password,
         })
         .await?;
-        db.use_ns(&self.config.namespace).use_db(&self.config.database).await?;
+        // Note: namespace/database selection is left to the caller
         Ok(db)
     }
 
